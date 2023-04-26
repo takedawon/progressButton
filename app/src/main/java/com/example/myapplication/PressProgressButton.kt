@@ -7,29 +7,66 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.media.MediaPlayer
 import android.util.AttributeSet
+import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import android.view.animation.LinearInterpolator
+import androidx.constraintlayout.widget.ConstraintSet.Motion
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-class ProgressButton @JvmOverloads constructor(
+class PressProgressButton @JvmOverloads constructor(
     context: Context,
     attributeSet: AttributeSet? = null,
     defStyleAttr: Int = 0
 ) : View(context, attributeSet, defStyleAttr) {
 
-    private val customStrokeWidth = 60f
-    private val innerArcPadding = 30f
+    private val customStrokeWidth = 150f
+    private val innerArcPadding = 20f
     private var progress = 0f
-    private var duration = 300L
+    private var duration = 1000L
+
+    private var maxValue = 100
 
     private var onCompletionListener: OnCompletionListener? = null
 
     private var animator: ValueAnimator? = null
+
+    var job: Job? = null
+
+    override fun onTouchEvent(event: MotionEvent?): Boolean {
+        when (event?.action) {
+            MotionEvent.ACTION_DOWN -> {
+                Log.d("라닉 Event: ", "${event}")
+
+                performClick()
+
+                job?.cancel()
+                job = CoroutineScope(Dispatchers.Main).launch {
+                    setProgress(100f)
+                    Log.d("라닉 progress:", progress.toString())
+                }
+
+                return true
+            }
+            MotionEvent.ACTION_CANCEL,
+            MotionEvent.ACTION_UP -> {
+                Log.d("라닉 Event: ", "${event}")
+
+                clearProgress()
+                return true
+            }
+            else -> {}
+        }
+        return false
+    }
+
+    override fun performClick(): Boolean {
+        return super.performClick()
+    }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         var widthSize = MeasureSpec.getSize(widthMeasureSpec)
@@ -65,7 +102,7 @@ class ProgressButton @JvmOverloads constructor(
             mainRight,
             mainBottom,
             270f,
-            progress * (360 / 100f),
+            progress * (360f / maxValue.toFloat()),
             false,
             paint
         )
@@ -94,13 +131,18 @@ class ProgressButton @JvmOverloads constructor(
 
     fun setProgress(progress: Float) {
         animator?.cancel()
+        animator = null
 
         animator = ValueAnimator.ofFloat(this.progress, progress).apply {
-            duration = this@ProgressButton.duration
+            duration = this@PressProgressButton.duration
             interpolator = LinearInterpolator()
             addUpdateListener { valueAnimator ->
-                this@ProgressButton.progress = (valueAnimator.animatedValue as Float)
+                this@PressProgressButton.progress = (valueAnimator.animatedValue as Float)
                 invalidate()
+
+                if(this@PressProgressButton.progress >= 100f) {
+                    complete()
+                }
             }
         }
         animator?.start()
@@ -108,11 +150,16 @@ class ProgressButton @JvmOverloads constructor(
 
     fun complete() {
         onCompletionListener?.onComplete()
+        clearProgress()
     }
 
     fun clearProgress(isWithAnimation: Boolean = true) {
+        job?.cancel()
+        job = null
+
         this.progress = 0f
         if (isWithAnimation) {
+            animator?.cancel()
             animator = null
         }
         invalidate()
